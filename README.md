@@ -46,8 +46,22 @@ independently decodes each result and asserts it matches the source state.
 
 ## Deploy
 
-The repository is a static site. Enable **Settings → Pages → Deploy from a branch →
-`main` / `/ (root)`** and it will be live at `https://<user>.github.io/castlevania/`.
+### Fly.io
+
+The app ships as a tiny nginx image (`Dockerfile`) and is deployed to Fly.io
+automatically by `.github/workflows/fly-deploy.yml` on every push to `main`
+(via the `FLY_API_TOKEN` repository secret).
+
+```bash
+flyctl deploy --remote-only --ha=false   # manual deploy
+flyctl open                              # https://castlevania-passwords.fly.dev/
+```
+
+### GitHub Pages
+
+The repository is also a plain static site. Enable **Settings → Pages → Deploy from
+a branch → `main` / `/ (root)`** and it will be live at
+`https://<user>.github.io/castlevania/`.
 
 ## Credits & license
 
