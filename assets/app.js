@@ -45,6 +45,7 @@ const state = {
   savePoint: "",
   name: null,
   tab: "passwords",
+  atlasBuilt: false,
   atlasCells: [],
 };
 
@@ -66,10 +67,7 @@ const els = {
   modal: document.getElementById("modal"),
   modalBody: document.getElementById("modalBody"),
   statCount: document.getElementById("statCount"),
-  statName: document.getElementById("statName"),
-  statPartner: document.getElementById("statPartner"),
-  statSave: document.getElementById("statSave"),
-  heroCount: document.getElementById("heroCount"),
+  statSummary: document.getElementById("statSummary"),
 };
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -111,7 +109,7 @@ function applyFilters(updateUrl = true) {
   state.page = 0;
   renderSummary();
   renderResults();
-  if (state.tab === "atlas") drawAtlas();
+  if (state.tab === "atlas") renderAtlas();
   if (state.tab === "stats") renderStats();
   if (updateUrl) syncUrl();
 }
@@ -119,9 +117,13 @@ function applyFilters(updateUrl = true) {
 function renderSummary() {
   const n = state.filtered.length;
   els.statCount.textContent = n.toLocaleString();
-  els.statName.textContent = state.name === null ? "all" : displayName(state.name);
-  els.statPartner.textContent = state.partner === "" ? "all" : PARTNER_ABBR[+state.partner];
-  els.statSave.textContent = state.savePoint === "" ? "all" : BLOCKS[+state.savePoint];
+  const parts = [];
+  if (n !== state.entries.length) parts.push("filtered");
+  if (state.name !== null) parts.push(displayName(state.name));
+  if (state.partner !== "") parts.push(PARTNER_ABBR[+state.partner]);
+  if (state.savePoint !== "") parts.push(BLOCKS[+state.savePoint]);
+  if (state.mode !== "") parts.push(MODE_NAME[+state.mode]);
+  els.statSummary.textContent = parts.length ? `passwords · ${parts.join(" · ")}` : "passwords";
   els.search.parentElement.classList.toggle("has-query", !!state.query);
 }
 
@@ -133,7 +135,7 @@ function renderResults() {
   const slice = state.filtered.slice(start, start + PAGE_SIZE);
 
   if (!total) {
-    els.results.innerHTML = `<div class="empty" style="grid-column:1/-1"><b>No passwords found</b>Try a different name, block, partner, mode or password fragment.</div>`;
+    els.results.innerHTML = `<div class="empty"><b>No passwords found</b>Try a different name, block, partner or password fragment.</div>`;
     els.pageInfo.textContent = "";
     els.prevPage.disabled = els.nextPage.disabled = true;
     return;
@@ -145,15 +147,15 @@ function renderResults() {
     <button class="result" data-id="${e.id}">
       ${matrixHTML(e.matrix, "mini")}
       <div class="meta">
-        <b>${esc(displayName(e.name))} &middot; <span style="color:${PARTNER_COLOR[e.partner]}">${esc(PARTNER_ABBR[e.partner])}</span></b>
-        <i>${esc(e.block)} &middot; ${esc(e.modeName)} mode &middot; ${e.toggleMaskIndex ? "toggle B" : "toggle A"}</i>
-        <div class="pw">${esc(e.password)}</div>
+        <div class="nm">${esc(displayName(e.name))} <span class="pt" style="color:${PARTNER_COLOR[e.partner]}">&middot; ${esc(PARTNER_ABBR[e.partner])}</span></div>
+        <div class="row2">${esc(e.block)} &middot; ${esc(e.modeName)}</div>
+        <code class="pw">${esc(e.password)}</code>
       </div>
     </button>`
     )
     .join("");
 
-  els.pageInfo.textContent = `Page ${state.page + 1} of ${pages} · ${total.toLocaleString()} results`;
+  els.pageInfo.textContent = `${state.page + 1} / ${pages}`;
   els.prevPage.disabled = state.page === 0;
   els.nextPage.disabled = state.page >= pages - 1;
 }
@@ -188,7 +190,10 @@ function renderBars(id, rows) {
     .join("");
 }
 
-let atlasGeo = { labelW: 210, cellW: 50, cellH: 20, headerH: 34, pad: 10 };
+function hexToRgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
 
 function buildAtlasRows() {
   const rows = [];
@@ -206,140 +211,71 @@ function buildAtlasRows() {
 
 const atlasRows = buildAtlasRows();
 
-function drawAtlas() {
-  const canvas = els.atlas;
-  const ctx = canvas.getContext("2d");
-  const dpr = window.devicePixelRatio || 1;
-  const { labelW, cellW, cellH, headerH, pad } = atlasGeo;
-  const cols = SAVE_POINTS.length;
-  const cssW = labelW + cols * cellW + pad;
-  const cssH = headerH + atlasRows.length * cellH + pad;
-  canvas.width = Math.ceil(cssW * dpr);
-  canvas.height = Math.ceil(cssH * dpr);
-  canvas.style.width = cssW + "px";
-  canvas.style.height = cssH + "px";
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  ctx.fillStyle = "#0b0712";
-  ctx.fillRect(0, 0, cssW, cssH);
-
-  ctx.font = "600 11px Inter, sans-serif";
-  ctx.textBaseline = "middle";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#9c90ad";
-  for (let c = 0; c < cols; c++) {
-    ctx.fillText(BLOCKS[c], labelW + c * cellW + cellW / 2, headerH / 2);
-  }
-
-  const matchSet = state.filtered.length === state.entries.length ? null : new Set(state.filtered.map((e) => e.id));
-  state.atlasCells = new Array(atlasRows.length * cols).fill(null);
-  const geo = { x0: labelW, y0: headerH, cellW, cellH, cols };
-
-  atlasRows.forEach((row, ri) => {
-    const y = headerH + ri * cellH;
-
-    if (row.newGroup) {
-      ctx.fillStyle = "#170f24";
-      ctx.fillRect(0, y, cssW, cellH * 2);
-      ctx.strokeStyle = "#3a2c57";
-      ctx.beginPath();
-      ctx.moveTo(0, y + 0.5);
-      ctx.lineTo(cssW, y + 0.5);
-      ctx.stroke();
-    }
-
-    const label = `${displayName(row.name)}  ·  ${PARTNER_ABBR[row.partner]}  ·  ${MODE_NAME[row.mode]}`;
-    ctx.textAlign = "left";
-    ctx.font = "600 11px Inter, sans-serif";
-    ctx.fillStyle = row.mode === 1 ? "#e08a8a" : "#cfc6dd";
-    ctx.fillText(label, 12, y + cellH / 2, labelW - 44);
-    ctx.fillStyle = "#6b5f7d";
-    ctx.font = "600 10px 'JetBrains Mono', monospace";
-    ctx.fillText(row.toggle ? "T1" : "T0", labelW - 26, y + cellH / 2);
-
-    for (let c = 0; c < cols; c++) {
-      const entry = findEntry(row, c);
-      state.atlasCells[ri * cols + c] = entry;
-      const x = labelW + c * cellW;
-      const pw = cellW - 3;
-      const ph = cellH - 3;
-
-      if (!entry) {
-        ctx.fillStyle = "#120c1b";
-        ctx.fillRect(x + 1.5, y + 1.5, pw, ph);
-        continue;
-      }
-
-      const marks = markCount(entry.password);
-      const alpha = 0.5 + 0.5 * (marks / 9);
-      const dim = matchSet && !matchSet.has(entry.id);
-      ctx.globalAlpha = dim ? 0.12 : alpha;
-      ctx.fillStyle = PARTNER_COLOR[row.partner];
-      roundRect(ctx, x + 1.5, y + 1.5, pw, ph, 3);
-      ctx.fill();
-
-      if (!dim) {
-        ctx.globalAlpha = matchSet ? 0.85 : 0.12;
-        ctx.strokeStyle = matchSet ? "#ffe6a8" : "#ffffff";
-        ctx.lineWidth = 1;
-        roundRect(ctx, x + 1.5, y + 1.5, pw, ph, 3);
-        ctx.stroke();
-      }
-
-      if (row.toggle) {
-        ctx.globalAlpha = dim ? 0.08 : 0.28;
-        ctx.strokeStyle = "#0a0710";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(x + 4, y + ph);
-        ctx.lineTo(x + pw, y + 4);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-    }
-  });
-
-  canvas._geo = geo;
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
 function findEntry(row, savePoint) {
   return state.lookup.get(`${row.name}|${row.mode}|${row.toggle}|${row.partner}|${savePoint}`) || null;
 }
 
-function atlasHit(ev) {
-  const geo = els.atlas._geo;
-  if (!geo) return null;
-  const rect = els.atlas.getBoundingClientRect();
-  const x = ev.clientX - rect.left;
-  const y = ev.clientY - rect.top;
-  const col = Math.floor((x - geo.x0) / geo.cellW);
-  const r = Math.floor((y - geo.y0) / geo.cellH);
-  if (col < 0 || col >= geo.cols || r < 0 || r >= atlasRows.length) return null;
-  return { row: r, col, entry: state.atlasCells[r * geo.cols + col] };
+function buildAtlas() {
+  const cols = SAVE_POINTS.length;
+
+  let head = '<thead><tr><th class="corner">Name &middot; partner</th>';
+  for (let c = 0; c < cols; c++) head += `<th>${BLOCKS[c]}</th>`;
+  head += "</tr></thead>";
+
+  state.atlasCells = [];
+  let body = "<tbody>";
+  atlasRows.forEach((row, ri) => {
+    body += `<tr${row.newGroup ? ' class="group-start"' : ""} data-row="${ri}">`;
+    body += `<th class="${row.mode === 1 ? "hard" : ""}"><span class="nm">${esc(displayName(row.name))}</span> <span class="pt">&middot; ${esc(PARTNER_ABBR[row.partner])}</span></th>`;
+    for (let c = 0; c < cols; c++) {
+      const entry = findEntry(row, c);
+      state.atlasCells.push(entry);
+      if (!entry) {
+        body += `<td class="cell invalid" data-col="${c}"></td>`;
+      } else {
+        const alpha = (0.5 + 0.45 * (markCount(entry.password) / 9)).toFixed(2);
+        body += `<td class="cell" data-id="${entry.id}" data-col="${c}" style="background:${hexToRgba(PARTNER_COLOR[row.partner], alpha)}"></td>`;
+      }
+    }
+    body += "</tr>";
+  });
+  body += "</tbody>";
+
+  els.atlas.innerHTML = `<table class="atlas">${head}${body}</table>`;
+  state.atlasBuilt = true;
+  applyAtlasFilter();
+}
+
+function applyAtlasFilter() {
+  if (!state.atlasBuilt) return;
+  const set = state.filtered.length === state.entries.length ? null : new Set(state.filtered.map((e) => e.id));
+  for (const td of els.atlas.querySelectorAll("td.cell[data-id]")) {
+    td.classList.toggle("dim", set !== null && !set.has(+td.dataset.id));
+  }
+}
+
+function renderAtlas() {
+  if (!state.atlasBuilt) buildAtlas();
+  else applyAtlasFilter();
+}
+
+function cellContext(td) {
+  const tr = td.closest("tr");
+  return { row: atlasRows[+tr.dataset.row], col: +td.dataset.col };
 }
 
 function onAtlasMove(ev) {
-  const hit = atlasHit(ev);
-  if (!hit) {
+  const td = ev.target.closest("td.cell");
+  if (!td) {
     els.tooltip.hidden = true;
     return;
   }
-  const row = atlasRows[hit.row];
-  const base = `<b>${esc(displayName(row.name))}</b> &middot; <span style="color:${PARTNER_COLOR[row.partner]}">${esc(PARTNER_ABBR[row.partner])}</span><br>${esc(BLOCKS[hit.col])} &mdash; ${esc(row.mode === 1 ? "Hard" : "Normal")} mode &middot; toggle ${row.toggle ? "B" : "A"}`;
-  const body = hit.entry
-    ? `${base}<br><code>${esc(hit.entry.password)}</code><br><span style="color:#9c90ad">${markCount(hit.entry.password)} marks &middot; click to inspect</span>`
-    : `${base}<br><span style="color:#9c90ad">No valid password at this save point.</span>`;
-  els.tooltip.innerHTML = body;
+  const { row, col } = cellContext(td);
+  const entry = td.dataset.id ? state.entries[+td.dataset.id] : null;
+  const base = `<b>${esc(displayName(row.name))}</b> &middot; <span style="color:${PARTNER_COLOR[row.partner]}">${esc(PARTNER_ABBR[row.partner])}</span><br>${esc(BLOCKS[col])} &middot; ${esc(MODE_NAME[row.mode])} &middot; toggle ${row.toggle ? "B" : "A"}`;
+  els.tooltip.innerHTML = entry
+    ? `${base}<br><code>${esc(entry.password)}</code><br><span class="muted">${markCount(entry.password)} marks &middot; click to inspect</span>`
+    : `${base}<br><span class="muted">No valid password at this save point.</span>`;
   els.tooltip.hidden = false;
   const pad = 14;
   let left = ev.clientX + pad;
@@ -353,16 +289,16 @@ function onAtlasMove(ev) {
 }
 
 function onAtlasClick(ev) {
-  const hit = atlasHit(ev);
-  if (hit && hit.entry) openDetail(hit.entry, false);
+  const td = ev.target.closest("td.cell");
+  if (td && td.dataset.id) openDetail(state.entries[+td.dataset.id], false);
 }
 
 function openDetail(entry, pushUrl = true) {
   const portrait = `${entry.partner === 0 ? "trevor" : PARTNER_CLASS[entry.partner]}-${entry.toggleMaskIndex}`;
   els.modalBody.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+    <div class="hero-id">
       ${matrixHTML(entry.matrix, "big")}
-      <div class="pw" style="font-family:'JetBrains Mono',monospace;color:var(--gold-2);letter-spacing:.14em;font-size:14px">${esc(entry.password)}</div>
+      <div class="modal-pw">${esc(entry.password)}</div>
     </div>
     <div class="detail">
       <div style="display:flex;gap:12px;align-items:center">
@@ -427,7 +363,7 @@ function copy(text, toast) {
 function flash(msg) {
   const t = document.createElement("div");
   t.textContent = msg;
-  t.style.cssText = "position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:#050308;border:1px solid var(--gold);color:var(--gold-2);padding:10px 18px;border-radius:10px;z-index:99;font-size:13px";
+  t.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface-2);border:1px solid var(--line-2);color:var(--text);padding:10px 16px;border-radius:10px;z-index:99;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.5)";
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 1600);
 }
@@ -473,7 +409,7 @@ function setTab(tab) {
   state.tab = tab;
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + tab));
-  if (tab === "atlas") drawAtlas();
+  if (tab === "atlas") renderAtlas();
   if (tab === "stats") renderStats();
   syncUrl();
 }
@@ -520,7 +456,6 @@ function wireEvents() {
   els.atlas.addEventListener("click", onAtlasClick);
   els.modal.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeModal(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !els.modal.hidden) closeModal(); });
-  window.addEventListener("resize", () => { if (state.tab === "atlas") drawAtlas(); });
 }
 
 function scrollResults() {
@@ -534,7 +469,6 @@ async function init() {
     const data = await res.json();
     state.entries = data.entries;
     state.lookup = new Map(state.entries.map((e) => [keyOf(e), e]));
-    els.heroCount.textContent = state.entries.length.toLocaleString();
 
     readUrl();
     populateSelects();
