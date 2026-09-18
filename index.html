@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Castlevania III Password Archive</title>
+<meta name="description" content="Search and visualise all 3,294 valid Castlevania III: Dracula's Curse passwords." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/style.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%A6%87%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <div class="crest" aria-hidden="true">
+      <svg viewBox="0 0 48 48" width="46" height="46">
+        <path d="M24 3 42 10v14c0 11-7.6 18.6-18 21C13.6 42.6 6 35 6 24V10z" fill="none" stroke="currentColor" stroke-width="2.4"/>
+        <path d="M24 12v22M17 20h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="24" cy="27" r="2.2" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="hero-text">
+      <h1>Castlevania III<span>Password Archive</span></h1>
+      <p class="tagline">Every valid <em>Dracula&rsquo;s Curse</em> password, decoded &mdash; <strong id="heroCount">3,294</strong> name&nbsp;&times;&nbsp;password combinations.</p>
+    </div>
+    <a class="btn ghost" id="randomBtn" href="#" title="Show a random password">Random</a>
+  </div>
+</header>
+
+<main>
+  <section class="controls" aria-label="Search and filters">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16.5 16.5 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="search" type="search" placeholder="Search name, block, partner, mode or password (e.g. W...W, 1-1, Sypha)…" autocomplete="off" spellcheck="false" />
+      <button id="clearSearch" class="clear" title="Clear" aria-label="Clear search">&times;</button>
+    </div>
+    <div class="filters">
+      <label>Mode<select id="fMode"></select></label>
+      <label>Partner<select id="fPartner"></select></label>
+      <label>Save point<select id="fSavePoint"></select></label>
+      <label>Name<select id="fName"></select></label>
+      <button id="resetBtn" class="btn ghost small">Reset</button>
+    </div>
+  </section>
+
+  <section class="summary">
+    <div class="stat"><span id="statCount">0</span><small>passwords shown</small></div>
+    <div class="stat"><span id="statName">—</span><small>name</small></div>
+    <div class="stat"><span id="statPartner">—</span><small>partner</small></div>
+    <div class="stat"><span id="statSave">—</span><small>save point</small></div>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="passwords" role="tab">Passwords</button>
+    <button class="tab" data-tab="atlas" role="tab">Atlas</button>
+    <button class="tab" data-tab="stats" role="tab">Stats</button>
+  </nav>
+
+  <section id="panel-passwords" class="panel active">
+    <div id="results" class="results"></div>
+    <div class="pager">
+      <button id="prevPage" class="btn ghost small">Previous</button>
+      <span id="pageInfo"></span>
+      <button id="nextPage" class="btn ghost small">Next</button>
+    </div>
+  </section>
+
+  <section id="panel-atlas" class="panel">
+    <div class="atlas-head">
+      <p>Each row is a unique name / partner / mode / toggle combination. Each column is a save point. Hover a cell for its password, click to inspect.</p>
+      <div class="legend">
+        <span><i class="dot none"></i>no partner</span>
+        <span><i class="dot sypha"></i>Sypha</span>
+        <span><i class="dot grant"></i>Grant</span>
+        <span><i class="dot alucard"></i>Alucard</span>
+        <span><i class="dot invalid"></i>invalid</span>
+      </div>
+    </div>
+    <div class="atlas-wrap">
+      <canvas id="atlas"></canvas>
+      <div id="tooltip" class="tooltip" hidden></div>
+    </div>
+  </section>
+
+  <section id="panel-stats" class="panel">
+    <div class="charts">
+      <div class="card">
+        <h3>Passwords per save point</h3>
+        <div id="chartSavePoint" class="bars"></div>
+      </div>
+      <div class="card">
+        <h3>Passwords per partner</h3>
+        <div id="chartPartner" class="bars"></div>
+      </div>
+      <div class="card">
+        <h3>Passwords per mode</h3>
+        <div id="chartMode" class="bars"></div>
+      </div>
+      <div class="card">
+        <h3>Marks per password</h3>
+        <div id="chartMarks" class="bars"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>Generated with the reverse-engineered Castlevania III password algorithm. Encryption scheme documented by
+    <a href="https://meatfighter.com/castlevania3-password/" target="_blank" rel="noopener">meatfighter</a>
+    (<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>).
+    Castlevania is a trademark of Konami. Fan project, not affiliated.</p>
+</footer>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <button class="modal-close" data-close aria-label="Close">&times;</button>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

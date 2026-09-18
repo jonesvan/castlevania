@@ -1,0 +1,4 @@
+node_modules/
+passwords.png
+.DS_Store
+*.log

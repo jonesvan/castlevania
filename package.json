@@ -1,0 +1,12 @@
+{
+  "name": "castlevania-password-archive",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Search and visualise all 3,294 valid Castlevania III: Dracula's Curse passwords.",
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "verify": "node scripts/verify.mjs",
+    "serve": "python3 -m http.server 8080"
+  }
+}
